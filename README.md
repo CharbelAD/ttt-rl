@@ -1,3 +1,14 @@
+This repo is a fork of https://github.com/antirez/ttt-rl.
+
+The current notable change from the original repo is that I modified the code to play any (m,n,k) game, such as connect four as suggested in the original version.
+
+To come (hopefully) is NN vs NN learning and MCTS.
+
+This repo is still very much a WIP, mistakes are likely to be present, and more changes are to come.
+
+Original README below
+
+-----
 # Tic Tac Toe with Reinforcement Learning
 
 *The only winning move is not to play*
