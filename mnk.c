@@ -10,12 +10,12 @@
 #define BOARD_ROWS 6
 #define BOARD_COLS 7
 #define K_IN_A_ROW 4
-#define BOARD_SIZE BOARD_ROWS*BOARD_COLS
+#define BOARD_SIZE 42
 
 // Neural network parameters.
-#define NN_INPUT_SIZE BOARD_SIZE * 2
+#define NN_INPUT_SIZE 85
 #define NN_HIDDEN_SIZE 100
-#define NN_OUTPUT_SIZE BOARD_SIZE
+#define NN_OUTPUT_SIZE 42
 #define LEARNING_RATE 0.1
 
 // Game board representation.
@@ -104,7 +104,7 @@ void softmax(float *input, float *output, int size) {
     }
 }
 
-/* Neural network foward pass (inference). We store the activations
+/* Neural network forward pass (inference). We store the activations
  * so we can also do backpropagation later. */
 void forward_pass(NeuralNetwork *nn, float *inputs) {
     // Copy inputs.
@@ -128,6 +128,7 @@ void forward_pass(NeuralNetwork *nn, float *inputs) {
     }
 
     // Apply softmax to get the final probabilities.
+    // printf("\t\tForward pass: softmax\n");  // Debug
     softmax(nn->raw_logits, nn->outputs, NN_OUTPUT_SIZE);
 }
 
@@ -174,7 +175,7 @@ void display_board(GameState *state) {
  * LEARNING OPPORTUNITY: You may want to learn (if not already aware) of
  * different ways to represent non scalar inputs in neural networks:
  * One hot encoding, learned embeddings, and even if it's just my random
- * exeriment this "permutation coding" that I'm using here.
+ * experiment this "permutation coding" that I'm using here.
  */
 void board_to_inputs(GameState *state, float *inputs) {
     for (int i = 0; i < BOARD_SIZE; i++) {
@@ -189,6 +190,7 @@ void board_to_inputs(GameState *state, float *inputs) {
             inputs[i*2+1] = 1;
         }
     }
+    inputs[BOARD_SIZE * 2] = state->current_player;
 }
 
 /* Transform (x, y) coordinates to vector coordinates */
@@ -201,54 +203,58 @@ int v(int x, int y){
 int check_game_over(GameState *state, char *winner) {
     int win = 0;
     // Check rows.
-    for (int i = 0; i < BOARD_COLS; i++) {
-        if (state->board[i*BOARD_COLS] != '.'){
-            win = 1;
-            for (int k = 1; k < K_IN_A_ROW; k++) {
-                if (state->board[i*BOARD_COLS] != state->board[i*BOARD_COLS + k]) {
-                    win = 0;
-                    break;
+    for (int j = 0; j <= BOARD_COLS - K_IN_A_ROW; j++){
+        for (int i = 0; i < BOARD_ROWS; i++) {
+            if (state->board[v(i,j)] != '.'){
+                win = 1;
+                for (int k = 1; k < K_IN_A_ROW; k++) {
+                    if (state->board[v(i, j)] != state->board[v(i, j + k)]) {
+                        win = 0;
+                        break;
+                    }
                 }
-            }
-            if (win) {
-                *winner = state->board[i*BOARD_COLS];
-                return 1;
+                if (win) {
+                    *winner = state->board[v(i, j)];
+                    return 1;
+                }
             }
         }
     }
 
     // Check columns.
-    for (int i = 0; i < BOARD_ROWS; i++) {
-        if (state->board[i] != '.') {
-            win = 1;
-            for (int k = 1; k < K_IN_A_ROW; k++) {
-                if (state->board[i] != state->board[i + k*BOARD_COLS]) {
-                    win = 0;
-                    break;
+    for (int j = 0; j < BOARD_COLS; j++){
+        for (int i = 0; i <= BOARD_ROWS - K_IN_A_ROW; i++) {
+            if (state->board[v(i, j)] != '.') {
+                win = 1;
+                for (int k = 1; k < K_IN_A_ROW; k++) {
+                    if (state->board[v(i, j)] != state->board[v(i + k, j)]) {
+                        win = 0;
+                        break;
+                    }
                 }
-            }
-            if (win) {
-                *winner = state->board[i];
-                return 1;
+                if (win) {
+                    *winner = state->board[v(i, j)];
+                    return 1;
+                }
             }
         }
     }
 
     // Check diagonals.
     // Diagonal wins can only occur starting in the top right square of size
-    // (m - k - 1) * (n - k -1)
-    for (int i = 0; i < BOARD_ROWS - K_IN_A_ROW - 1; i++) {
-        for (int j = 0; j < BOARD_COLS - K_IN_A_ROW - 1; j++){
-            if (state->board[i*BOARD_COLS + j] != '.'){
+    // (m - k) * (n - k)
+    for (int i = 0; i <= BOARD_ROWS - K_IN_A_ROW; i++) {
+        for (int j = 0; j <= BOARD_COLS - K_IN_A_ROW; j++){
+            if (state->board[v(i, j)] != '.'){
                 win = 1;
                 for (int k = 1; k < K_IN_A_ROW; k++) {
-                    if (state->board[i*BOARD_COLS + j] != state->board[(i+k)*BOARD_COLS + j + k]) {
+                    if (state->board[v(i, j)] != state->board[v(i + k, j + k)]) {
                         win = 0;
                         break;
                     }
                 }
                 if (win) {
-                    *winner = state->board[i*BOARD_COLS + j];
+                    *winner = state->board[v(i, j)];
                     return 1;
                 }
             }
@@ -257,19 +263,19 @@ int check_game_over(GameState *state, char *winner) {
 
     // Check anti-diagonal.
     // Anti-diagonal wins can only occur starting in the top left square of size
-    // (m - k - 1) * (n - k -1)
-    for (int i = 0; i < BOARD_ROWS - K_IN_A_ROW - 1; i++) {
+    // (m - k) * (n - k)
+    for (int i = 0; i <= BOARD_ROWS - K_IN_A_ROW; i++) {
         for (int j = BOARD_COLS - K_IN_A_ROW; j < BOARD_COLS; j++){
-            if (state->board[i*BOARD_COLS + j] != '.'){
+            if (state->board[v(i, j)] != '.'){
                 win = 1;
                 for (int k = 1; k < K_IN_A_ROW; k++) {
-                    if (state->board[i*BOARD_COLS + j] != state->board[(i-k)*BOARD_COLS + j - k]) {
+                    if (state->board[v(i, j)] != state->board[v(i + k, j - k)]) {
                         win = 0;
                         break;
                     }
                 }
                 if (win) {
-                    *winner = state->board[i*BOARD_COLS + j];
+                    *winner = state->board[v(i, j)];
                     return 1;
                 }
             }
@@ -443,7 +449,7 @@ void learn_from_game(NeuralNetwork *nn, int *move_history, int num_moves, int nn
 
     // Process each move the neural network made.
     for (int move_idx = 0; move_idx < num_moves; move_idx++) {
-        // Skip if this wasn't a move by the neural network.
+        // Skip if this wasn't a move by the current player.
         if ((nn_moves_even && move_idx % 2 != 1) ||
             (!nn_moves_even && move_idx % 2 != 0))
         {
@@ -455,6 +461,7 @@ void learn_from_game(NeuralNetwork *nn, int *move_history, int num_moves, int nn
         for (int i = 0; i < move_idx; i++) {
             char symbol = (i % 2 == 0) ? 'X' : 'O';
             state.board[move_history[i]] = symbol;
+            state.current_player = (state.current_player + 1) % 2;
         }
 
         // Convert board to inputs and do forward pass.
@@ -517,8 +524,8 @@ void learn_from_game(NeuralNetwork *nn, int *move_history, int num_moves, int nn
     }
 }
 
-/* Play one game of Tic Tac Toe against the neural network. */
-void play_game(NeuralNetwork *nn) {
+/* Play one game of Connect Four against the neural network. */
+void play_interactive_game(NeuralNetwork *nn) {
     GameState state;
     char winner;
     int move_history[BOARD_SIZE]; // Maximum BOARD_SIZE moves in a game.
@@ -526,7 +533,7 @@ void play_game(NeuralNetwork *nn) {
 
     init_game(&state);
 
-    printf("Welcome to Tic Tac Toe! You are X, the computer is O.\n");
+    printf("Welcome to Connect Four! You are X, the computer is O.\n");
     printf("Enter positions as numbers from 0 to 8 (see picture).\n");
 
     while (!check_game_over(&state, &winner)) {
@@ -574,21 +581,13 @@ void play_game(NeuralNetwork *nn) {
 
     // Learn from this game
     learn_from_game(nn, move_history, num_moves, 1, winner);
+    learn_from_game(nn, move_history, num_moves, 0, winner);
 }
 
 /* Get a random valid move, this is used for training
- * against a random opponent. Note: this function will loop forever
- * if the board is full, but here we want simple code. */
-// int get_random_move(GameState *state) {
-//     while(1) {
-//         int move = rand() % BOARD_SIZE;
-//         if (state->board[move] != '.') continue;
-//         return move;
-//     }
-// }
-
+ * against a random opponent.*/
 int get_random_move(GameState *state) {
-    char buffer[BOARD_ROWS * BOARD_COLS];
+    char buffer[BOARD_SIZE];
     char c;
     memcpy(&buffer, state->board, BOARD_SIZE);
 
@@ -621,7 +620,7 @@ int get_random_move(GameState *state) {
  * Montecarlo Tree Search (MCTS), where a tree structure repesents
  * potential future game states that are explored according to
  * some selection: you may want to learn about it. */
-char play_random_game(NeuralNetwork *nn, int *move_history, int *num_moves) {
+char play_random_game(NeuralNetwork *nn, int *move_history, int *num_moves, int random) {
     GameState state;
     char winner = 0;
     *num_moves = 0;
@@ -632,7 +631,11 @@ char play_random_game(NeuralNetwork *nn, int *move_history, int *num_moves) {
         int move;
 
         if (state.current_player == 0) {  // Random player's turn (X)
-            move = get_random_move(&state);
+            if (random){
+                move = get_random_move(&state);
+            } else {
+                move = get_computer_move(&state, nn, 0);
+            }
         } else {  // Neural network's turn (O)
             move = get_computer_move(&state, nn, 0);
         }
@@ -652,8 +655,8 @@ char play_random_game(NeuralNetwork *nn, int *move_history, int *num_moves) {
     return winner;
 }
 
-/* Train the neural network against random moves. */
-void train_against_random(NeuralNetwork *nn, int num_games) {
+/* Train the neural network against random moves or itself. */
+void train_against_self(NeuralNetwork *nn, int num_games, int random) {
     int move_history[BOARD_SIZE];
     int num_moves;
     int wins = 0, losses = 0, ties = 0;
@@ -662,20 +665,20 @@ void train_against_random(NeuralNetwork *nn, int num_games) {
 
     int played_games = 0;
     for (int i = 0; i < num_games; i++) {
-        char winner = play_random_game(nn, move_history, &num_moves);
+        char winner = play_random_game(nn, move_history, &num_moves, random);
         played_games++;
 
         // Accumulate statistics that are provided to the user (it's fun).
         if (winner == 'O') {
             wins++; // Neural network won.
         } else if (winner == 'X') {
-            losses++; // Random player won.
+            losses++; // Other player won.
         } else {
             ties++; // Tie.
         }
 
         // Show progress every many games to avoid flooding the stdout.
-        if ((i + 1) % 10000 == 0) {
+        if ((i + 1) % 1000 == 0) {
             printf("Games: %d, Wins: %d (%.1f%%), "
                    "Losses: %d (%.1f%%), Ties: %d (%.1f%%)\n",
                   i + 1, wins, (float)wins * 100 / played_games,
@@ -691,6 +694,10 @@ void train_against_random(NeuralNetwork *nn, int num_games) {
 }
 
 int main(int argc, char **argv) {
+    // /* make stdin and stdout unbuffered */
+    // setvbuf(stdin, NULL, _IONBF, 0);
+    // setvbuf(stdout, NULL, _IONBF, 0);
+
     int random_games = 150000; // Fast and enough to play in a decent way.
 
     if (argc > 1) random_games = atoi(argv[1]);
@@ -701,12 +708,12 @@ int main(int argc, char **argv) {
     init_neural_network(&nn);
 
     // Train against random moves.
-    if (random_games > 0) train_against_random(&nn, random_games);
+    if (random_games > 0) train_against_self(&nn, random_games, 0);
 
     // Play game with human and learn more.
     while(1) {
         char play_again;
-        play_game(&nn);
+        play_interactive_game(&nn);
 
         printf("Play again? (y/n): ");
         scanf(" %c", &play_again);
